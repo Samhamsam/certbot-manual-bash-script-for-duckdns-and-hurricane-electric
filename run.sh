@@ -4,10 +4,16 @@
 DOMAIN="$1"
 EMAIL="$2"
 HAPROXY_CERT_PATH="$3"
+HURRICANE_PASSW="$4"
 CERT_FOR=""
 
 if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ] || [ -z "$HAPROXY_CERT_PATH" ]; then
-   echo "Please enter DOMAIN as Parameter 1 and your E-Mail as Parameter 2 and the Path where you want to store the haproxy cert as Parameter 3!" 
+   echo "Please enter:"
+   echo "Argument 1: DOMAIN to be validated"
+   echo "Argument 2: E-Mail for letsencrypt"
+   echo "Argument 3: The path where you want to store the haproxy ssl file"
+   echo "Argument 4: if you use hurricane electric, your password for the txt"
+   echo "Example: ./run.sh example.com examle@mx.de /home/example/haproxy/certs/ example_hurricane_password" 
    exit 1
 fi
 
@@ -62,9 +68,9 @@ certbot certonly \
  --config-dir ${CONFIGDIR} \
  --work-dir ${WORKDIR} \
  --logs-dir ${LOGDIR} \
- --manual-auth-hook "./hurricane.sh" ;
+ --manual-auth-hook "./hurricane.sh ${HURRICANE_PASSW}" ;
 fi
 
-CERTPATH="${CERTHOME}/config/live/${DOMAIN}"
+CERTPATH="${CERTHOME}config/live/${DOMAIN}"
 
 cat "${CERTPATH}/fullchain.pem" "${CERTPATH}/privkey.pem" | tee "${HAPROXY_CERT_PATH}/${DOMAIN}.pem" 

@@ -3,3 +3,4 @@
 !run.sh
 !duckdns.sh
 !hurricane.sh
+!.env_example

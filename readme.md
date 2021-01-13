@@ -2,6 +2,7 @@
 
 ## how to start?
 * Download the repository
+* Verify that you have certbot installed.
 * make the .sh scripts executable with ```chmod +x```
 * Run the script with ```./run.sh arg1 arg2 arg3 arg4```
 

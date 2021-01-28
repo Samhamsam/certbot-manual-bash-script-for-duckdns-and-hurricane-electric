@@ -1,76 +1,116 @@
 #!/bin/bash
 
+# INPUT DATA
+DOMAIN=
+TYPE=
+EMAIL=
+LOCATION=
+SECRET=
+PROXY=
+SUBDOMAIN=
 
-DOMAIN="$1"
-EMAIL="$2"
-HAPROXY_CERT_PATH="$3"
-HURRICANE_PASSW="$4"
-CERT_FOR=""
+# AUTO DATA
+#SUBDOMAIN= #For duckdns
+COMMAND=
+FULLDOMAIN=
 
-if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ] || [ -z "$HAPROXY_CERT_PATH" ]; then
-   echo "Please enter:"
-   echo "Argument 1: DOMAIN to be validated"
-   echo "Argument 2: E-Mail for letsencrypt"
-   echo "Argument 3: The path where you want to store the haproxy ssl file"
-   echo "Argument 4: if you use hurricane electric, your password for the txt"
-   echo "Example: ./run.sh example.com examle@mx.de /home/example/haproxy/certs/ example_hurricane_password" 
-   exit 1
-fi
+RED='\033[0;31m'
+NC='\033[0m'
 
-echo "DOMAIN = $DOMAIN"
-echo "EMAIL = $EMAIL"
-echo "HAPROXY CERT PATH = $HAPROXY_CERT_PATH"
+help(){
+	echo -e "${RED}"
+	echo -e "Example:"
+	echo -e "./run.sh -t duckdns -d duckdns.org -e my@email.com -l /home/some/folder/ -s mysecret -r nginx -sd cloud"
+	echo -e "${NC}"
+}
 
-if [[ "$DOMAIN" == *"duckdns"* ]]; then
-    CERT_FOR="duckdns"
-    echo "Add certificate for duckdns"
+
+mainfunc() {
+	certbot certonly \
+ 	--noninteractive \
+ 	--manual \
+ 	--preferred-challenges dns \
+ 	--agree-tos \
+ 	--manual-public-ip-logging-ok \
+ 	--email="${EMAIL}" \
+ 	-d "${FULLDOMAIN}" \
+ 	--config-dir ${CONFIGDIR} \
+ 	--work-dir ${WORKDIR} \
+ 	--logs-dir ${LOGDIR} \
+ 	--manual-auth-hook "${COMMAND}" ;
+}
+
+create_haproxy_cert(){
+	cat "${CERTPATH}/fullchain.pem" "${CERTPATH}/privkey.pem" | tee "${LOCATION}/${FULLDOMAIN}.pem"
+}
+
+create_nginx_cert(){
+	cp "${CONFIGDIR}/live/${FULLDOMAIN}/cert.pem" "${LOCATION}/${FULLDOMAIN}.crt"
+	cp "${CONFIGDIR}/live/${FULLDOMAIN}/privkey.pem" "${LOCATION}/${FULLDOMAIN}.key"
+}
+
+
+while [[ "$#" -gt 0 ]]; do
+	case $1 in
+		-t|--type) TYPE=$2
+                shift
+                ;;
+		-d|--domain) DOMAIN=$2
+		shift
+		;;
+		-e|--email) EMAIL=$2
+		shift
+		;;
+		-l|--path) LOCATION=$2
+		shift
+		;;
+		-s|--secret) SECRET=$2
+		shift
+		;;
+		-r|--rproxy) PROXY=$2
+		shift
+		;;
+		-sd|--subdomain) SUBDOMAIN=$2
+		shift
+		;;
+        esac
+        shift
+done
+
+if [ "$TYPE" == "duckdns" ]; then
+	COMMAND="./duckdns.sh ${SECRET} ${SUBDOMAIN}"
+elif [ "$TYPE" == "hurricane" ]; then
+	COMMAND="./hurricane.sh ${SECRET}"
+elif [ "$TYPE" == "cloudflare" ]; then
+	COMMAND="./cloudflare.sh ${SECRET} ${DOMAIN} ${SUBDOMAIN}"
 else
-   CERT_FOR="hurricane"
-   echo "Add certificate for Hurricane Electric"
+	help
 fi
 
-CERTHOME="$(pwd)/letsencrypt/"
-mkdir -p $CERTHOME # create certhome if not exist
-
+FULLDOMAIN="${SUBDOMAIN}.${DOMAIN}"
+CERTHOME="$(pwd)/letsencrypt" ;
+echo "Creating letsencrypt folder.."
+mkdir -p ${CERTHOME} # create certhome if not exist
 CONFIGDIR="${CERTHOME}/config"
 WORKDIR="${CERTHOME}/work"
 LOGDIR="${CERTHOME}/logs"
+CERTPATH="${CERTHOME}config/live/${FULLDOMAIN}"
 
-if [ ! -z "${CONFIGDIR}" ]; then
-  rm -rf "${CONFIGDIR}/*";
+
+help
+
+#certbot
+echo "Creating with ${TYPE} for ${FULLDOMAIN} a certificate.."
+
+mainfunc
+
+if [ "$PROXY" == "nginx" ]; then
+	echo "Copying nginx cert files to \"${LOCATION}\".."
+        create_nginx_cert
+elif [ "$TYPE" == "hurricane" ]; then
+	echo "Copying hurricane cert file to \"${LOCATION}\".."
+        create_haproxy_cert
 else
-  echo "CONFIGDIR ist leer."
-  exit 1
+        help
 fi
 
-if [ "$CERT_FOR" == "duckdns" ]; then
-certbot certonly \
- --noninteractive \
- --manual \
- --preferred-challenges dns \
- --agree-tos \
- --manual-public-ip-logging-ok \
- --email="${EMAIL}" \
- -d "${DOMAIN}" \
- --config-dir ${CONFIGDIR} \
- --work-dir ${WORKDIR} \
- --logs-dir ${LOGDIR} \
- --manual-auth-hook "./duckdns.sh" ;
-else
-certbot certonly \
- --noninteractive \
- --manual \
- --preferred-challenges dns \
- --agree-tos \
- --manual-public-ip-logging-ok \
- --email="${EMAIL}" \
- -d "${DOMAIN}" \
- --config-dir ${CONFIGDIR} \
- --work-dir ${WORKDIR} \
- --logs-dir ${LOGDIR} \
- --manual-auth-hook "./hurricane.sh ${HURRICANE_PASSW}" ;
-fi
-
-CERTPATH="${CERTHOME}config/live/${DOMAIN}"
-
-cat "${CERTPATH}/fullchain.pem" "${CERTPATH}/privkey.pem" | tee "${HAPROXY_CERT_PATH}/${DOMAIN}.pem" 
